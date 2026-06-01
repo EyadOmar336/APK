@@ -53,6 +53,8 @@ fun PlayStoreSimulatorDialog(
     val ramGb by viewModel.ramGb.collectAsState()
     val storageGb by viewModel.storageGb.collectAsState()
     val activeKernel by viewModel.kernel.collectAsState()
+    val isRecentsOpen by viewModel.isRecentsOpen.collectAsState()
+    val recentApps by viewModel.recentApps.collectAsState()
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -68,59 +70,168 @@ fun PlayStoreSimulatorDialog(
                 .background(Color(0xFFF8FAFC)),
             color = Color(0xFFF8FAFC)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Play Store Header Bar
-                PlayStoreHeader(
-                    screenState = screenState,
-                    selectedApp = selectedApp,
-                    onBack = {
-                        if (screenState == "APP_RUNNING") {
-                            viewModel.selectPlayApp(selectedApp!!)
-                        } else {
-                            viewModel.goBackToPlayHome()
-                        }
-                    },
-                    onClose = onDismiss
-                )
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Play Store Header Bar: only shown when exploring inside Play Store (HOME, DETAIL)
+                    if (screenState == "HOME" || screenState == "DETAIL") {
+                        PlayStoreHeader(
+                            screenState = screenState,
+                            selectedApp = selectedApp,
+                            onBack = {
+                                if (screenState == "DETAIL") {
+                                    viewModel.goBackToPlayHome()
+                                } else {
+                                    viewModel.goHome()
+                                }
+                            },
+                            onClose = onDismiss
+                        )
+                    }
 
-                AnimatedContent(
-                    targetState = screenState,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { targetScreen ->
-                    when (targetScreen) {
-                        "HOME" -> {
-                            PlayStoreHome(
-                                playApps = playApps,
-                                ramGb = ramGb,
-                                storageGb = storageGb,
-                                onAppClick = { viewModel.selectPlayApp(it) }
-                            )
-                        }
-                        "DETAIL" -> {
-                            selectedApp?.let { app ->
-                                PlayStoreDetail(
-                                    app = app,
-                                    onInstall = { viewModel.installPlayApp(app.id) },
-                                    onUninstall = { viewModel.uninstallPlayApp(app.id) },
-                                    onOpen = { viewModel.runInstalledApp(app) }
-                                )
-                            }
-                        }
-                        "APP_RUNNING" -> {
-                            selectedApp?.let { app ->
-                                PlayStoreAppRunner(
-                                    app = app,
-                                    viewModel = viewModel,
-                                    ramGb = ramGb,
-                                    storageGb = storageGb,
-                                    activeKernel = activeKernel
-                                )
+                    Box(modifier = Modifier.weight(1f)) {
+                        AnimatedContent(
+                            targetState = screenState,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) { targetScreen ->
+                            when (targetScreen) {
+                                "LAUNCHER" -> {
+                                    AospLauncherHomescreen(
+                                        playApps = playApps,
+                                        kernel = activeKernel,
+                                        ramGb = ramGb,
+                                        storageGb = storageGb,
+                                        onOpenPlayStore = { viewModel.openPlayStoreApp() },
+                                        onOpenChrome = { viewModel.openChrome() },
+                                        onOpenYoutube = { viewModel.openYoutube() },
+                                        onOpenGmail = { viewModel.openGmail() },
+                                        onOpenPhotos = { viewModel.openPhotos() },
+                                        onOpenDialer = { viewModel.openDialer() },
+                                        onOpenApp = { app -> viewModel.runInstalledApp(app) },
+                                        onPowerOff = onDismiss
+                                    )
+                                }
+                                "HOME" -> {
+                                    PlayStoreHome(
+                                        playApps = playApps,
+                                        ramGb = ramGb,
+                                        storageGb = storageGb,
+                                        onAppClick = { viewModel.selectPlayApp(it) }
+                                    )
+                                }
+                                "DETAIL" -> {
+                                    selectedApp?.let { app ->
+                                        PlayStoreDetail(
+                                            app = app,
+                                            onInstall = { viewModel.installPlayApp(app.id) },
+                                            onUninstall = { viewModel.uninstallPlayApp(app.id) },
+                                            onOpen = { viewModel.runInstalledApp(app) }
+                                        )
+                                    }
+                                }
+                                "APP_RUNNING" -> {
+                                    selectedApp?.let { app ->
+                                        PlayStoreAppRunner(
+                                            app = app,
+                                            viewModel = viewModel,
+                                            ramGb = ramGb,
+                                            storageGb = storageGb,
+                                            activeKernel = activeKernel
+                                        )
+                                    }
+                                }
+                                "CHROME" -> {
+                                    RealPlayStoreWebView(
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                "YOUTUBE" -> {
+                                    YouTubeAppSimulator(
+                                        onClose = { viewModel.goHome() }
+                                    )
+                                }
+                                "GMAIL" -> {
+                                    GmailAppSimulator(
+                                        kernel = activeKernel,
+                                        ramGb = ramGb,
+                                        storageGb = storageGb,
+                                        onClose = { viewModel.goHome() }
+                                    )
+                                }
+                                "PHOTOS" -> {
+                                    PhotosAppSimulator(
+                                        ram = ramGb,
+                                        storage = storageGb,
+                                        onClose = { viewModel.goHome() }
+                                    )
+                                }
+                                "DIALER" -> {
+                                    DialerAppSimulator(
+                                        ram = ramGb,
+                                        storage = storageGb,
+                                        kernel = activeKernel,
+                                        onClose = { viewModel.goHome() }
+                                    )
+                                }
                             }
                         }
                     }
+
+                    // Custom Premium System Navigation Bar to let user control their apps & navigate home at any time
+                    SystemNavigationBar(
+                        onBack = {
+                            if (screenState == "APP_RUNNING") {
+                                val sel = selectedApp
+                                if (sel != null) {
+                                    viewModel.selectPlayApp(sel)
+                                } else {
+                                    viewModel.goBackToPlayHome()
+                                }
+                            } else if (screenState == "DETAIL") {
+                                viewModel.goBackToPlayHome()
+                            } else if (screenState == "HOME") {
+                                viewModel.goHome()
+                            } else if (screenState != "LAUNCHER") {
+                                viewModel.goHome()
+                            } else {
+                                onDismiss()
+                            }
+                        },
+                        onHome = {
+                            viewModel.closeRecents()
+                            viewModel.goHome()
+                        },
+                        onRecents = {
+                            if (viewModel.isRecentsOpen.value) {
+                                viewModel.closeRecents()
+                            } else {
+                                viewModel.openRecents()
+                            }
+                        }
+                    )
+                }
+
+                // Seamless overlay of multitasking tasks switcher inside dialog window itself
+                if (isRecentsOpen) {
+                    RecentsTaskSwitcher(
+                        recentApps = recentApps,
+                        ramGb = ramGb,
+                        activeKernel = activeKernel,
+                        onClose = { viewModel.closeRecents() },
+                        onAppSelect = { app ->
+                            viewModel.closeRecents()
+                            viewModel.runInstalledApp(app)
+                        },
+                        onRemoveApp = { appId ->
+                            viewModel.removeRecentApp(appId)
+                        },
+                        onClearAll = {
+                            viewModel.clearRecents()
+                            viewModel.closeRecents()
+                        }
+                    )
                 }
             }
         }
@@ -448,6 +559,8 @@ fun PlayStoreAppListItem(
                             "benchmark" -> Color(0xFFFFF1F2)
                             "booster" -> Color(0xFFECFDF5)
                             "files" -> Color(0xFFEFF6FF)
+                            "freefire" -> Color(0xFFFFF7ED)
+                            "subway" -> Color(0xFFFEF08A)
                             else -> Color(0xFFFDF4FF)
                         }
                     ),
@@ -458,6 +571,8 @@ fun PlayStoreAppListItem(
                         "benchmark" -> Icons.Default.Assessment
                         "booster" -> Icons.Default.Bolt
                         "files" -> Icons.Default.FolderOpen
+                        "freefire" -> Icons.Default.LocalFireDepartment
+                        "subway" -> Icons.Default.DirectionsRun
                         else -> Icons.Default.Gamepad
                     },
                     contentDescription = null,
@@ -465,6 +580,8 @@ fun PlayStoreAppListItem(
                         "benchmark" -> Color(0xFFE11D48)
                         "booster" -> Color(0xFF059669)
                         "files" -> Color(0xFF2563EB)
+                        "freefire" -> Color(0xFFEA580C)
+                        "subway" -> Color(0xFFCA8A04)
                         else -> Color(0xFFC084FC)
                     },
                     modifier = Modifier.size(32.dp)
@@ -562,6 +679,8 @@ fun PlayStoreDetail(
                                 "benchmark" -> Color(0xFFFFF1F2)
                                 "booster" -> Color(0xFFECFDF5)
                                 "files" -> Color(0xFFEFF6FF)
+                                "freefire" -> Color(0xFFFFF7ED)
+                                "subway" -> Color(0xFFFEF08A)
                                 else -> Color(0xFFFDF4FF)
                             }
                         ),
@@ -572,6 +691,8 @@ fun PlayStoreDetail(
                             "benchmark" -> Icons.Default.Assessment
                             "booster" -> Icons.Default.Bolt
                             "files" -> Icons.Default.FolderOpen
+                            "freefire" -> Icons.Default.LocalFireDepartment
+                            "subway" -> Icons.Default.DirectionsRun
                             else -> Icons.Default.Gamepad
                         },
                         contentDescription = null,
@@ -579,6 +700,8 @@ fun PlayStoreDetail(
                             "benchmark" -> Color(0xFFE11D48)
                             "booster" -> Color(0xFF059669)
                             "files" -> Color(0xFF2563EB)
+                            "freefire" -> Color(0xFFEA580C)
+                            "subway" -> Color(0xFFCA8A04)
                             else -> Color(0xFFC084FC)
                         },
                         modifier = Modifier.size(42.dp)
@@ -798,6 +921,8 @@ fun PlayStoreAppRunner(
         "booster" -> SmartBoosterRunner(viewModel, ramGb)
         "files" -> FileBrowserRunner(storageGb)
         "game" -> PubgRunner(ramGb, activeKernel)
+        "freefire" -> FreeFireRunner(ramGb, activeKernel)
+        "subway" -> SubwaySurfersRunner(ramGb, activeKernel)
         else -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("تطبيق افتراضي مستقر يعمل بنجاح!")
@@ -1393,6 +1518,240 @@ fun PubgRunner(
                     fontSize = 11.sp,
                     lineHeight = 15.sp,
                     textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FreeFireRunner(
+    ramGb: Int,
+    activeKernel: String
+) {
+    var hasBoostedFps by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0F172A))
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Free Fire game badge simulator
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color(0xFFEA580C), Color(0xFF0F172A))
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.LocalFireDepartment,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+                Text(
+                    text = "Free Fire Cloud Emulator Pro",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp
+                )
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "أداء رسوميات لعبة فري فاير على جهازك المجمّع:",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFF7E3D)
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("مستوى الرسوميات:", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    Text("Ultra (وضوح فائق ومحسّن)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("معدل الإطارات:", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    Text(if (hasBoostedFps) "90 FPS (ثبات وسلاسة مطلقة)" else "60 FPS (مستقر وعالٍ)", color = Color(0xFF4ADE80), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("استهلاك رام الروم الخاص بك:", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    Text("تم توفير ٤.٥ جيجابايت من ${ramGb}GB", color = Color.White, fontSize = 12.sp)
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("النواة النشطة والتعريفات:", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    Text(activeKernel, color = Color(0xFFFF7E3D), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (!hasBoostedFps) {
+            Button(
+                onClick = { hasBoostedFps = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) {
+                Text("تفعيل وضع 90 إطار لـ Free Fire ⚡", fontWeight = FontWeight.Bold)
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF15803D).copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                    .border(1.dp, Color(0xFF15803D), RoundedCornerShape(16.dp))
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = "تم بنجاح تفعيل وضع 90 إطار لرووم Free Fire الخاص بك! اللعبة مستقرة تماماً وبسلاسة غير مسبوقة.",
+                    color = Color(0xFF4ADE80),
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SubwaySurfersRunner(
+    ramGb: Int,
+    activeKernel: String
+) {
+    var speedBoosted by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF1E293B))
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Subway game badge simulator
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color(0xFFEAB308), Color(0xFF1E293B))
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.DirectionsRun,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+                Text(
+                    text = "Subway Surfers Core Simulator",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp
+                )
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "بيانات تشغيل Subway Surfers داخل الروم:",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFEAB308)
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("معدل التحديث الذكي:", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    Text("120Hz (سلاسة متكاملة للشاشة)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("استجابة اللمس المتعدد:", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    Text(if (speedBoosted) "Fingertip Turbo: 2x تسريع اللمس" else "عادية وممتازة", color = Color(0xFF4ADE80), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("تعريف النواة:", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    Text(activeKernel, color = Color(0xFFEAB308), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (!speedBoosted) {
+            Button(
+                onClick = { speedBoosted = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEAB308)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) {
+                Text("تفعيل استجابة اللمس الفورية (Fingertip Turbo) ⚡", fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF15803D).copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                    .border(1.dp, Color(0xFF15803D), RoundedCornerShape(16.dp))
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = "تم تفعيل Fingertip Turbo بنجاح! الركض والقفز ومراوغة القطارات تعمل استجابتها الآن بـ 0.1 مللي ثانية بفضل الرام والنواة المطورة.",
+                    color = Color(0xFF4ADE80),
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }

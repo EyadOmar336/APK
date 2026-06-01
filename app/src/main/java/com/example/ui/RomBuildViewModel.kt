@@ -61,11 +61,34 @@ class RomBuildViewModel(private val repository: RomBuildRepository) : ViewModel(
     private val _isPlayStoreOpen = MutableStateFlow(false)
     val isPlayStoreOpen = _isPlayStoreOpen.asStateFlow()
 
-    private val _playStoreScreen = MutableStateFlow("HOME") // "HOME", "DETAIL", "APP_RUNNING"
+    private val _playStoreScreen = MutableStateFlow("LAUNCHER") // "LAUNCHER", "HOME", "DETAIL", "APP_RUNNING", etc.
     val playStoreScreen = _playStoreScreen.asStateFlow()
 
     private val _selectedPlayApp = MutableStateFlow<PlayApp?>(null)
     val selectedPlayApp = _selectedPlayApp.asStateFlow()
+
+    // Recents / Multitasking Switcher simulation states
+    private val _isRecentsOpen = MutableStateFlow(false)
+    val isRecentsOpen = _isRecentsOpen.asStateFlow()
+
+    private val _recentApps = MutableStateFlow<List<PlayApp>>(emptyList())
+    val recentApps = _recentApps.asStateFlow()
+
+    fun openRecents() {
+        _isRecentsOpen.value = true
+    }
+
+    fun closeRecents() {
+        _isRecentsOpen.value = false
+    }
+
+    fun clearRecents() {
+        _recentApps.value = emptyList()
+    }
+
+    fun removeRecentApp(appId: String) {
+        _recentApps.value = _recentApps.value.filter { it.id != appId }
+    }
 
     private val _playApps = MutableStateFlow(listOf(
         PlayApp(
@@ -100,13 +123,33 @@ class RomBuildViewModel(private val repository: RomBuildRepository) : ViewModel(
         ),
         PlayApp(
             id = "game",
-            name = "PUBG Mobile (رسوميات فائقة Ultra HD)",
+            name = "PUBG Mobile (ببجي موبايل)",
             developer = "Level Infinite",
             rating = "4.6",
             downloads = "١ مليار+",
             category = "ألعاب (Games)",
             iconName = "game",
-            description = "لعبة باتل رويال الأكثر شهرة. بفضل تجميعك لجهاز بذاكرة 16GB أو 24GB رام ونواة كسر السرعة، يمكنك الآن تشغيل اللعبة بأوكسي إعدادات رسومية UHD بمعدل 90 إطار بالثانية دون أي تقطيع!"
+            description = "لعبة باتل رويال الأكثر شهرة. بفضل تجميعك لجهاز بذاكرة 16GB أو 24GB رام ونواة كسر السرعة، يمكنك الآن تشغيل اللعبة بأعظم إعدادات رسومية UHD بمعدل 90 إطار بالثانية دون أي تقطيع!"
+        ),
+        PlayApp(
+            id = "freefire",
+            name = "Garena Free Fire (فري فاير)",
+            developer = "Garena International I",
+            rating = "4.7",
+            downloads = "١ مليار+",
+            category = "ألعاب (Games)",
+            iconName = "freefire",
+            description = "أشهر لعبة بقاء وإطلاق نار للهواتف المحمولة. بفضل معالج كسر السرعة والرامات العالية التي قمت باختيارها، ستعمل فري فاير بسلاسة فائقة بمعدل 90 إطار وبدون أي توقف."
+        ),
+        PlayApp(
+            id = "subway",
+            name = "Subway Surfers (سيرفاي)",
+            developer = "SYBO Games",
+            rating = "4.5",
+            downloads = "١.٥ مليار+",
+            category = "ألعاب (Games)",
+            iconName = "subway",
+            description = "الركض والقفز ومراوغة القطارات والمأمور الغاضب. استمتع بألوان رائعة واستجابة اللمس الفورية على جهازك الجديد المطور."
         )
     ))
     val playApps = _playApps.asStateFlow()
@@ -124,6 +167,41 @@ class RomBuildViewModel(private val repository: RomBuildRepository) : ViewModel(
 
     private val _boostAmount = MutableStateFlow(0)
     val boostAmount = _boostAmount.asStateFlow()
+
+    fun bootCustomRom() {
+        _isPlayStoreOpen.value = true
+        _playStoreScreen.value = "LAUNCHER"
+        _selectedPlayApp.value = null
+    }
+
+    fun openPlayStoreApp() {
+        _playStoreScreen.value = "HOME"
+        _selectedPlayApp.value = null
+    }
+
+    fun openChrome() {
+        _playStoreScreen.value = "CHROME"
+    }
+
+    fun openYoutube() {
+        _playStoreScreen.value = "YOUTUBE"
+    }
+
+    fun openGmail() {
+        _playStoreScreen.value = "GMAIL"
+    }
+
+    fun openPhotos() {
+        _playStoreScreen.value = "PHOTOS"
+    }
+
+    fun openDialer() {
+        _playStoreScreen.value = "DIALER"
+    }
+
+    fun goHome() {
+        _playStoreScreen.value = "LAUNCHER"
+    }
 
     fun openPlayStore() {
         _isPlayStoreOpen.value = true
@@ -148,6 +226,12 @@ class RomBuildViewModel(private val repository: RomBuildRepository) : ViewModel(
     fun runInstalledApp(app: PlayApp) {
         _selectedPlayApp.value = app
         _playStoreScreen.value = "APP_RUNNING"
+        
+        // Add to active recent apps
+        val list = _recentApps.value.toMutableList()
+        list.removeAll { it.id == app.id }
+        list.add(0, app)
+        _recentApps.value = list.toList()
         
         if (app.id == "benchmark") {
             _benchmarkResult.value = null

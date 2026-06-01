@@ -11,6 +11,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -55,9 +65,12 @@ fun RomBuildScreen(
     val lastCompiledBuild by viewModel.lastCompiledBuild.collectAsState()
     val buildHistory by viewModel.buildHistory.collectAsState()
     val isPlayStoreOpen by viewModel.isPlayStoreOpen.collectAsState()
+    val isRecentsOpen by viewModel.isRecentsOpen.collectAsState()
+    val recentApps by viewModel.recentApps.collectAsState()
 
     val consoleLazyState = rememberLazyListState()
     var selectedTab by remember { mutableStateOf(0) }
+    var playStoreSubMode by remember { mutableStateOf("SIMULATOR") }
 
     // Smooth scroll to bottom of logs on new entry
     LaunchedEffect(logLines.size) {
@@ -239,92 +252,139 @@ fun RomBuildScreen(
             }
         },
         bottomBar = {
-            if (selectedTab == 0) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFF3F4F9))
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                Button(
-                    onClick = { viewModel.compileAndGenerateRom() },
-                    enabled = !isCompiling,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .testTag("generate_zip_button"),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2563EB),
-                        disabledContainerColor = Color(0xFF2563EB).copy(alpha = 0.5f)
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 8.dp,
-                        pressedElevation = 2.dp
-                    )
-                ) {
-                    if (isCompiling) {
-                        CircularProgressIndicator(
-                            color = Color.White,
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF3F4F9))
+            ) {
+                if (selectedTab == 0) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Button(
+                            onClick = { viewModel.compileAndGenerateRom() },
+                            enabled = !isCompiling,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .testTag("generate_zip_button"),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF2563EB),
+                                disabledContainerColor = Color(0xFF2563EB).copy(alpha = 0.5f)
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(
+                                defaultElevation = 8.dp,
+                                pressedElevation = 2.dp
+                            )
+                        ) {
+                            if (isCompiling) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "جاري تجميع النظام ($progress%)...",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "صنع وتجميع ملف الروم ROM",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
+                        }
+
                         Text(
-                            text = "جاري تجميع النظام ($progress%)...",
+                            text = "AOSP Master Build Node 01 - Frankfurt",
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "صنع وتجميع ملف الروم ROM",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            color = Color(0xFF94A3B8),
+                            modifier = Modifier.padding(top = 8.dp),
+                            letterSpacing = 1.5.sp
                         )
                     }
                 }
 
-                Text(
-                    text = "AOSP Master Build Node 01 - Frankfurt",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF94A3B8),
-                    modifier = Modifier.padding(top = 10.dp),
-                    letterSpacing = 1.5.sp
+                // Custom Premium System Navigation Bar (Link to active back/home/recents actions)
+                SystemNavigationBar(
+                    onBack = {
+                        if (isPlayStoreOpen) {
+                            val screen = viewModel.playStoreScreen.value
+                            if (screen == "APP_RUNNING") {
+                                val selectedApp = viewModel.selectedPlayApp.value
+                                if (selectedApp != null) {
+                                    viewModel.selectPlayApp(selectedApp)
+                                } else {
+                                    viewModel.goBackToPlayHome()
+                                }
+                            } else if (screen == "DETAIL") {
+                                viewModel.goBackToPlayHome()
+                            } else if (screen == "HOME") {
+                                viewModel.goHome()
+                            } else if (screen != "LAUNCHER") {
+                                viewModel.goHome()
+                            } else {
+                                viewModel.closePlayStore()
+                            }
+                        } else if (selectedTab == 1) {
+                            if (playStoreSubMode == "WEB") {
+                                playStoreSubMode = "SIMULATOR"
+                            } else {
+                                val screen = viewModel.playStoreScreen.value
+                                if (screen == "APP_RUNNING") {
+                                    val selectedApp = viewModel.selectedPlayApp.value
+                                    if (selectedApp != null) {
+                                        viewModel.selectPlayApp(selectedApp)
+                                    } else {
+                                        viewModel.goBackToPlayHome()
+                                    }
+                                } else if (screen == "DETAIL") {
+                                    viewModel.goBackToPlayHome()
+                                } else if (screen == "HOME") {
+                                    viewModel.goHome()
+                                } else if (screen != "LAUNCHER") {
+                                    viewModel.goHome()
+                                } else {
+                                    selectedTab = 0
+                                }
+                            }
+                        } else {
+                            android.widget.Toast.makeText(context, "الرجوع: أنت في الشاشة الرئيسية", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onHome = {
+                        viewModel.closeRecents()
+                        if (isPlayStoreOpen) {
+                            viewModel.goHome()
+                        } else if (selectedTab == 1 && playStoreSubMode == "SIMULATOR") {
+                            viewModel.goHome()
+                        } else {
+                            selectedTab = 0
+                            android.widget.Toast.makeText(context, "الشاشة الرئيسية 🏠", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onRecents = {
+                        if (viewModel.isRecentsOpen.value) {
+                            viewModel.closeRecents()
+                        } else {
+                            viewModel.openRecents()
+                        }
+                    }
                 )
-
-                // Android Navigation Bar Simulation
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .border(2.dp, Color(0xFFCBD5E1), RoundedCornerShape(4.dp))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .border(2.dp, Color(0xFFCBD5E1), CircleShape)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(14.dp)
-                            .border(2.dp, Color(0xFFCBD5E1), RoundedCornerShape(2.dp))
-                    )
-                }
-            }
             }
         }
     ) { innerPadding ->
@@ -564,7 +624,7 @@ fun RomBuildScreen(
                     ) {
                         Column(
                             modifier = Modifier
-                                .clickable { viewModel.openPlayStore() }
+                                .clickable { viewModel.bootCustomRom() }
                                 .padding(18.dp)
                         ) {
                             Row(
@@ -592,13 +652,13 @@ fun RomBuildScreen(
                                     Column {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             Text(
-                                                text = "بوابة متجر Google Play",
+                                                text = "تشغيل محاكي نظام الأندرويد 🚀",
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFF0F172A)
                                             )
                                             Text(
-                                                text = "مفتوح ومباشر",
+                                                text = "AOSP OS BOOT",
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White,
@@ -608,7 +668,7 @@ fun RomBuildScreen(
                                             )
                                         }
                                         Text(
-                                            text = "اضغط للدخول إلى متجر جوجل الحقيقي وتجربة نظامك السحابي",
+                                            text = "اضغط للإقلاع الفوري لنظام الأندرويد المخصّص، وتجربة معالجك، وراماتك والألعاب!",
                                             fontSize = 11.sp,
                                             color = Color(0xFF64748B)
                                         )
@@ -1165,11 +1225,267 @@ fun RomBuildScreen(
                 }
             }
             } else {
-                RealPlayStoreWebView(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                        .padding(horizontal = 16.dp)
+                ) {
+                    // Navigation header for Sub-Tabs
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                            .padding(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (playStoreSubMode == "SIMULATOR") Color(0xFF0F9D58) else Color.Transparent)
+                                .clickable { playStoreSubMode = "SIMULATOR" }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "تنزيل الألعاب الفوري بنقرة 🎮",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (playStoreSubMode == "SIMULATOR") Color.White else Color(0xFF475569)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (playStoreSubMode == "WEB") Color(0xFF0F9D58) else Color.Transparent)
+                                .clickable { playStoreSubMode = "WEB" }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "متجر جوجل ويب 🌐",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (playStoreSubMode == "WEB") Color.White else Color(0xFF475569)
+                            )
+                        }
+                    }
+
+                    if (playStoreSubMode == "SIMULATOR") {
+                        val screenState by viewModel.playStoreScreen.collectAsState()
+                        val playApps by viewModel.playApps.collectAsState()
+                        val selectedApp by viewModel.selectedPlayApp.collectAsState()
+                        val ramGb by viewModel.ramGb.collectAsState()
+                        val storageGb by viewModel.storageGb.collectAsState()
+                        val activeKernel by viewModel.kernel.collectAsState()
+
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .border(BorderStroke(1.dp, Color(0xFF0F9D58).copy(alpha = 0.2f)), RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White)
+                        ) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // Play Store embedded screen header
+                                if (screenState == "HOME" || screenState == "DETAIL") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFFF1F5F9))
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (screenState != "HOME") {
+                                                IconButton(
+                                                    onClick = {
+                                                        if (screenState == "APP_RUNNING") {
+                                                            viewModel.selectPlayApp(selectedApp!!)
+                                                        } else {
+                                                            viewModel.goBackToPlayHome()
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowBack,
+                                                        contentDescription = "الرجوع",
+                                                        tint = Color(0xFF1E293B),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Default.Shop,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF0F9D58),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                            }
+
+                                            Text(
+                                                text = when (screenState) {
+                                                    "HOME" -> "Google Play (التثبيت السريع)"
+                                                    "DETAIL" -> selectedApp?.name ?: "التفاصيل"
+                                                    else -> selectedApp?.name ?: "التشغيل السحابي"
+                                                },
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF0F172A)
+                                            )
+                                        }
+
+                                        // Direct indicator badge
+                                        Box(
+                                            modifier = Modifier
+                                                .background(Color(0xFFD1FAE5), RoundedCornerShape(6.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                "تثبيت مجاني مباشر",
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF065F46)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                @OptIn(ExperimentalAnimationApi::class)
+                                AnimatedContent(
+                                    targetState = screenState,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { targetScreen ->
+                                    when (targetScreen) {
+                                        "LAUNCHER" -> {
+                                            AospLauncherHomescreen(
+                                                playApps = playApps,
+                                                kernel = activeKernel,
+                                                ramGb = ramGb,
+                                                storageGb = storageGb,
+                                                onOpenPlayStore = { viewModel.openPlayStoreApp() },
+                                                onOpenChrome = { viewModel.openChrome() },
+                                                onOpenYoutube = { viewModel.openYoutube() },
+                                                onOpenGmail = { viewModel.openGmail() },
+                                                onOpenPhotos = { viewModel.openPhotos() },
+                                                onOpenDialer = { viewModel.openDialer() },
+                                                onOpenApp = { app -> viewModel.runInstalledApp(app) },
+                                                onPowerOff = { selectedTab = 0 }
+                                            )
+                                        }
+                                        "HOME" -> {
+                                            PlayStoreHome(
+                                                playApps = playApps,
+                                                ramGb = ramGb,
+                                                storageGb = storageGb,
+                                                onAppClick = { viewModel.selectPlayApp(it) }
+                                            )
+                                        }
+                                        "DETAIL" -> {
+                                            selectedApp?.let { app ->
+                                                PlayStoreDetail(
+                                                    app = app,
+                                                    onInstall = { viewModel.installPlayApp(app.id) },
+                                                    onUninstall = { viewModel.uninstallPlayApp(app.id) },
+                                                    onOpen = { viewModel.runInstalledApp(app) }
+                                                )
+                                            }
+                                        }
+                                        "APP_RUNNING" -> {
+                                            selectedApp?.let { app ->
+                                                PlayStoreAppRunner(
+                                                    app = app,
+                                                    viewModel = viewModel,
+                                                    ramGb = ramGb,
+                                                    storageGb = storageGb,
+                                                    activeKernel = activeKernel
+                                                )
+                                            }
+                                        }
+                                        "CHROME" -> {
+                                            RealPlayStoreWebView(
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                        "YOUTUBE" -> {
+                                            YouTubeAppSimulator(
+                                                onClose = { viewModel.goHome() }
+                                            )
+                                        }
+                                        "GMAIL" -> {
+                                            GmailAppSimulator(
+                                                kernel = activeKernel,
+                                                ramGb = ramGb,
+                                                storageGb = storageGb,
+                                                onClose = { viewModel.goHome() }
+                                            )
+                                        }
+                                        "PHOTOS" -> {
+                                            PhotosAppSimulator(
+                                                ram = ramGb,
+                                                storage = storageGb,
+                                                onClose = { viewModel.goHome() }
+                                            )
+                                        }
+                                        "DIALER" -> {
+                                            DialerAppSimulator(
+                                                ram = ramGb,
+                                                storage = storageGb,
+                                                kernel = activeKernel,
+                                                onClose = { viewModel.goHome() }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Column(modifier = Modifier.weight(1f)) {
+                            // Friendly reminder banner
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 6.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+                                border = BorderStroke(1.dp, Color(0xFFFDE68A))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = Color(0xFFD97706),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "ملاحظة: لتنزيل الألعاب بنقرة واحدة كـ APK بدون حساب جوجل، اختر تبويب 'تنزيل الألعاب الفوري' في الأعلى!",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF92400E)
+                                    )
+                                }
+                            }
+
+                            RealPlayStoreWebView(
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1179,5 +1495,456 @@ fun RomBuildScreen(
             viewModel = viewModel,
             onDismiss = { viewModel.closePlayStore() }
         )
+    }
+
+    if (isRecentsOpen) {
+        RecentsTaskSwitcher(
+            recentApps = recentApps,
+            ramGb = ram,
+            activeKernel = kernel,
+            onClose = { viewModel.closeRecents() },
+            onAppSelect = { app ->
+                viewModel.closeRecents()
+                selectedTab = 1
+                playStoreSubMode = "SIMULATOR"
+                if (isPlayStoreOpen) {
+                    viewModel.runInstalledApp(app)
+                } else {
+                    viewModel.openPlayStore()
+                    viewModel.runInstalledApp(app)
+                }
+            },
+            onRemoveApp = { appId ->
+                viewModel.removeRecentApp(appId)
+            },
+            onClearAll = {
+                viewModel.clearRecents()
+                android.widget.Toast.makeText(context, "🧹 تم تنظيف الرام وإغلاق كافة المهام النشطة!", android.widget.Toast.LENGTH_SHORT).show()
+                viewModel.closeRecents()
+            }
+        )
+    }
+}
+
+@Composable
+fun SystemNavigationBar(
+    onBack: () -> Unit,
+    onHome: () -> Unit,
+    onRecents: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF0F172A))
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Back Button: Triangle pointing right (Arabic/RTL) or standard back
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .clickable { onBack() },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.size(16.dp)) {
+                val path = Path().apply {
+                    moveTo(0f, 0f)
+                    lineTo(size.width, size.height / 2f)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(
+                    path = path,
+                    color = Color.White,
+                    style = Stroke(width = 2.dp.toPx(), join = StrokeJoin.Round)
+                )
+            }
+        }
+
+        // Home Button: Rounded square
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .clickable { onHome() },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.size(16.dp)) {
+                drawRoundRect(
+                    color = Color.White,
+                    size = size,
+                    cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            }
+        }
+
+        // Recents Button: Three horizontal lines
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .clickable { onRecents() },
+            contentAlignment = Alignment.Center
+        ) {
+            Canvas(modifier = Modifier.size(16.dp)) {
+                val strokeWidth = 2.dp.toPx()
+                val spacing = 5.dp.toPx()
+                drawLine(
+                    color = Color.White,
+                    start = Offset(0f, size.height / 2f - spacing),
+                    end = Offset(size.width, size.height / 2f - spacing),
+                    strokeWidth = strokeWidth
+                )
+                drawLine(
+                    color = Color.White,
+                    start = Offset(0f, size.height / 2f),
+                    end = Offset(size.width, size.height / 2f),
+                    strokeWidth = strokeWidth
+                )
+                drawLine(
+                    color = Color.White,
+                    start = Offset(0f, size.height / 2f + spacing),
+                    end = Offset(size.width, size.height / 2f + spacing),
+                    strokeWidth = strokeWidth
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RecentsTaskSwitcher(
+    recentApps: List<PlayApp>,
+    ramGb: Int,
+    activeKernel: String,
+    onClose: () -> Unit,
+    onAppSelect: (PlayApp) -> Unit,
+    onRemoveApp: (String) -> Unit,
+    onClearAll: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .clickable { onClose() },
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f)
+                .clickable(enabled = false) {}
+                .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Drag handle bar
+                Box(
+                    modifier = Modifier
+                        .width(48.dp)
+                        .height(5.dp)
+                        .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(100.dp))
+                        .align(Alignment.CenterHorizontally)
+                )
+
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "شاشة تعدد المهام والرام (Recents) ⚡",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "إدارة أداء النظام والتنقل بين الألعاب النشطة",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 10.sp
+                        )
+                    }
+
+                    if (recentApps.isNotEmpty()) {
+                        TextButton(
+                            onClick = onClearAll,
+                            colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEF4444))
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("إغلاق الكل", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // RAM & Optimize Box
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        val appRamBase = 4.2f
+                        val appsRamUsage = recentApps.sumOf { app ->
+                            when (app.id) {
+                                "game" -> 6.0
+                                "freefire" -> 4.5
+                                "subway" -> 2.0
+                                "benchmark" -> 3.2
+                                "files" -> 1.0
+                                else -> 0.8
+                            }
+                        }.toFloat()
+
+                        val usedRamRaw = appRamBase + appsRamUsage
+                        val usedRam = if (usedRamRaw > ramGb) ramGb.toFloat() else usedRamRaw
+                        val progress = usedRam / ramGb
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Default.Memory, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(18.dp))
+                                Text("ذاكرة الوصول العشوائي (RAM):", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                            }
+                            Text(
+                                text = String.format(Locale.US, "%.1fGB / %dGB", usedRam, ramGb),
+                                color = if (progress > 0.8f) Color(0xFFEF4444) else Color(0xFF4ADE80),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                            color = if (progress > 0.8f) Color(0xFFEF4444) else if (progress > 0.5f) Color(0xFFFBBF24) else Color(0xFF10B981),
+                            trackColor = Color.White.copy(alpha = 0.1f)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "نواة المعالج النشطة: $activeKernel",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 10.sp
+                            )
+                            Text(
+                                text = "حالة رص الرام: مستقرة (AOSP Swap)",
+                                color = Color(0xFF3B82F6),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Recent apps cards list
+                if (recentApps.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Smartphone,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.2f),
+                                modifier = Modifier.size(64.dp)
+                            )
+                            Text(
+                                "لا توجد تطبيقات نشطة بالخلفية حالياً",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "تصفح وشغل الألعاب لتراها هنا وتتنقل بينها على الرام المطورة بنقرة واحدة!",
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "اسحب أو انقر لاستكمال اللعب فوراً بدون إعادة تحميل:",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+
+                    LazyRow(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(bottom = 8.dp)
+                    ) {
+                        items(recentApps) { app ->
+                            Card(
+                                modifier = Modifier
+                                    .width(180.dp)
+                                    .fillMaxHeight()
+                                    .clickable { onAppSelect(app) },
+                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                            ) {
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .background(
+                                                        when (app.id) {
+                                                            "benchmark" -> Color(0xFFFFF1F2)
+                                                            "booster" -> Color(0xFFECFDF5)
+                                                            "files" -> Color(0xFFEFF6FF)
+                                                            "freefire" -> Color(0xFFFFF7ED)
+                                                            "subway" -> Color(0xFFFEF08A)
+                                                            else -> Color(0xFFFDF4FF)
+                                                        },
+                                                        CircleShape
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = when (app.id) {
+                                                        "benchmark" -> Icons.Default.Assessment
+                                                        "booster" -> Icons.Default.Bolt
+                                                        "files" -> Icons.Default.FolderOpen
+                                                        "freefire" -> Icons.Default.LocalFireDepartment
+                                                        "subway" -> Icons.Default.DirectionsRun
+                                                        else -> Icons.Default.Gamepad
+                                                    },
+                                                    contentDescription = null,
+                                                    tint = when (app.id) {
+                                                        "benchmark" -> Color(0xFFE11D48)
+                                                        "booster" -> Color(0xFF059669)
+                                                        "files" -> Color(0xFF2563EB)
+                                                        "freefire" -> Color(0xFFEA580C)
+                                                        "subway" -> Color(0xFFCA8A04)
+                                                        else -> Color(0xFFC084FC)
+                                                    },
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = app.name.split(" ")[0],
+                                                color = Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = { onRemoveApp(app.id) },
+                                            modifier = Modifier.size(20.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "أزل من الذاكرة",
+                                                tint = Color.White.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 2.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                when (app.id) {
+                                                    "benchmark" -> Color(0xFF1E1E2E)
+                                                    "booster" -> Color(0xFF0F172A)
+                                                    "files" -> Color(0xFFF1F5F9)
+                                                    "freefire" -> Color(0xFF0F172A)
+                                                    "subway" -> Color(0xFF1E293B)
+                                                    else -> Color(0xFF0B0F19)
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.padding(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "حالة التشغيل السريعة",
+                                                color = if (app.id == "files") Color.Black.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.5f),
+                                                fontSize = 8.sp
+                                            )
+                                            Text(
+                                                text = when (app.id) {
+                                                    "game" -> "90 FPS ⚡"
+                                                    "freefire" -> "90 FPS Ultra ⚡"
+                                                    "subway" -> "Fingertip Turbo ON"
+                                                    "benchmark" -> "تم الاختبار"
+                                                    "booster" -> "محسّن جاهز"
+                                                    else -> "نشط ومستقر"
+                                                },
+                                                color = Color(0xFF4ADE80),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Black,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            Text(
+                                                text = "انقر للفتح الفوري",
+                                                color = if (app.id == "files") Color.Black.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.7f),
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
