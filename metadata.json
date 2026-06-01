@@ -1,0 +1,6 @@
+{
+  "name": "System ROM Builder",
+  "description": "Sleek custom Android OS ROM configuration, compiling simulator and flashable download suite.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
