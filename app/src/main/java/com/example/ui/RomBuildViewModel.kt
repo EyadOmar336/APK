@@ -61,7 +61,7 @@ class RomBuildViewModel(private val repository: RomBuildRepository) : ViewModel(
     private val _isPlayStoreOpen = MutableStateFlow(false)
     val isPlayStoreOpen = _isPlayStoreOpen.asStateFlow()
 
-    private val _playStoreScreen = MutableStateFlow("LAUNCHER") // "LAUNCHER", "HOME", "DETAIL", "APP_RUNNING", etc.
+    private val _playStoreScreen = MutableStateFlow("BUILDER") // "BUILDER", "LAUNCHER", "HOME", "DETAIL", "APP_RUNNING", etc.
     val playStoreScreen = _playStoreScreen.asStateFlow()
 
     private val _selectedPlayApp = MutableStateFlow<PlayApp?>(null)
@@ -201,6 +201,10 @@ class RomBuildViewModel(private val repository: RomBuildRepository) : ViewModel(
 
     fun goHome() {
         _playStoreScreen.value = "LAUNCHER"
+    }
+
+    fun goToBuilder() {
+        _playStoreScreen.value = "BUILDER"
     }
 
     fun openPlayStore() {

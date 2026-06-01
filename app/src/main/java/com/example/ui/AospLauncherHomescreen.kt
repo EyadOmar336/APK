@@ -50,7 +50,8 @@ fun AospLauncherHomescreen(
     onOpenPhotos: () -> Unit,
     onOpenDialer: () -> Unit,
     onOpenApp: (PlayApp) -> Unit,
-    onPowerOff: () -> Unit
+    onPowerOff: () -> Unit,
+    onGoToBuilder: () -> Unit
 ) {
     var currentTime by remember { mutableStateOf("") }
     var currentDate by remember { mutableStateOf("") }
@@ -296,7 +297,8 @@ fun AospLauncherHomescreen(
                 LauncherAppItem("youtube", "يوتيوب", Icons.Default.VideoLibrary, Color(0xFFFF0000), action = onOpenYoutube),
                 LauncherAppItem("gmail", "جيميل", Icons.Default.Email, Color(0xFFEA4335), action = onOpenGmail),
                 LauncherAppItem("photos", "المعرض", Icons.Default.Photo, Color(0xFFF7B500), action = onOpenPhotos),
-                LauncherAppItem("dialer", "الهاتف", Icons.Default.Phone, Color(0xFF0F9D58), action = onOpenDialer)
+                LauncherAppItem("dialer", "الهاتف", Icons.Default.Phone, Color(0xFF0F9D58), action = onOpenDialer),
+                LauncherAppItem("builder", "تغيير الروم ⚙️", Icons.Default.Settings, Color(0xFF6366F1), action = onGoToBuilder)
             )
 
             // Dynamic installed apps list from store

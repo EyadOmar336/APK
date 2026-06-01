@@ -24,7 +24,7 @@ class GreetingScreenshotTest {
   fun greeting_screenshot() {
     composeTestRule.setContent { 
       MyApplicationTheme { 
-        Text("System ROM Builder UI Verified") 
+        Text("AOSP OS Simulator UI Verified") 
       } 
     }
 

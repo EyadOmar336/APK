@@ -110,7 +110,14 @@ fun PlayStoreSimulatorDialog(
                                         onOpenPhotos = { viewModel.openPhotos() },
                                         onOpenDialer = { viewModel.openDialer() },
                                         onOpenApp = { app -> viewModel.runInstalledApp(app) },
-                                        onPowerOff = onDismiss
+                                        onPowerOff = {
+                                            viewModel.goToBuilder()
+                                            onDismiss()
+                                        },
+                                        onGoToBuilder = {
+                                            viewModel.goToBuilder()
+                                            onDismiss()
+                                        }
                                     )
                                 }
                                 "HOME" -> {
